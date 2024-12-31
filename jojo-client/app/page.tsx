@@ -111,6 +111,7 @@ export default function Home() {
   };
 
   const handleConnectionToggle = async () => {
+    console.log("handleConnectionToggle: ", connectionStatus)
     if (connectionStatus === 'connected') {
       await stopConnection();
     } else {
