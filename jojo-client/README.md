@@ -1,11 +1,21 @@
 ## Getting Started
+1 Jan 2025
 
-next14, OpenAI Realtime API, WebRTC 
+`next14, OpenAI Realtime API, WebRTC`
 
-Reference: https://platform.openai.com/docs/guides/realtime-webrtc
+![Screenshot](screenshot.png)
 
-`1 Jan 2025`
+_Reference_: https://platform.openai.com/docs/guides/realtime-webrtc
 
+## Run it
+
+```
+pnpm install 
+pnpm run dev
+```
+
+
+## TODO - for Pi4b
 ```
 # on macos
 
