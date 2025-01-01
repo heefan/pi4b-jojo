@@ -134,7 +134,7 @@ export default function Home() {
     <div className="flex items-center justify-center">
       <div className="max-w-md w-full p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
         <h1 className="text-2xl font-bold mb-10 text-center dark:text-gray-100">
-          Realtime WebRTC Connection
+          OpenAI Realtime WebRTC Session
         </h1>
 
         <div className="space-y-6">
