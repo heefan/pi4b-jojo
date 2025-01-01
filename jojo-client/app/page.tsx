@@ -65,9 +65,20 @@ export default function Home() {
       audioEl.autoplay = true;
       peerConnection.current.ontrack = e => audioEl.srcObject = e.streams[0];
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: true
-      });
+      let mediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: true
+        });
+      } catch (err) {
+        console.error('Microphone access error:', err);
+        throw new Error(`Microphone access failed: ${err instanceof Error ? err.message : 'Unknown error'}. Please check if a microphone is connected and permissions are granted.`);
+      }
+
+      if (!mediaStream) {
+        throw new Error('Failed to get media stream');
+      }
+
       peerConnection.current.addTrack(mediaStream.getTracks()[0]);
 
       dataChannel.current = peerConnection.current.createDataChannel('oai-events');
@@ -89,8 +100,8 @@ export default function Home() {
         },
       });
 
-      const answer = {
-        type: 'answer',
+      const answer: RTCSessionDescriptionInit = {
+        type: 'answer' as RTCSdpType,
         sdp: await sdpResponse.text(),
       };
       await peerConnection.current.setRemoteDescription(answer);
