@@ -30,6 +30,9 @@ COPY . .
 
 # Build the application with type checking and ESLint disabled
 ENV DISABLE_ESLINT_PLUGIN=true
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV COMPOSER_ALLOW_SUPERUSER=1
+
 RUN pnpm build
 
 # Production image, copy all the files and run next
@@ -39,6 +42,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install pnpm globally and configure store
 RUN npm install -g pnpm

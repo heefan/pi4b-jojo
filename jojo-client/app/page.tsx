@@ -4,15 +4,25 @@ import { IconMicrophone } from "@/components/icons/IconMicrophone";
 import { IconSpinner } from "@/components/icons/IconSpinner";
 import { IconStop } from "@/components/icons/IconStop";
 import { getKeysHeader } from '@/utils/settings';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+
+// Add new type for chat messages
+type Message = {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+};
 
 export default function Home() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [error, setError] = useState<string>('');
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const dataChannel = useRef<RTCDataChannel | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [currentTranscript, setCurrentTranscript] = useState<string>('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const getButtonStyles = () => {
     if (connectionStatus === 'disconnected') {
@@ -83,7 +93,13 @@ export default function Home() {
 
       dataChannel.current = peerConnection.current.createDataChannel('oai-events');
       dataChannel.current.addEventListener('message', (e) => {
-        console.log('Received message:', e);
+        const data = JSON.parse(e.data);
+        if (data.type === 'transcript') {
+          setCurrentTranscript(data.text);
+        } else if (data.type === 'response') {
+          handleNewMessage('assistant', data.text);
+          setCurrentTranscript('');
+        }
       });
 
       const offer = await peerConnection.current.createOffer();
@@ -130,56 +146,155 @@ export default function Home() {
     }
   };
 
-  return (
-    <div className="flex items-center justify-center">
-      <div className="max-w-md w-full p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-        <h1 className="text-2xl font-bold mb-10 text-center dark:text-gray-100">
-          OpenAI Realtime WebRTC Session
-        </h1>
+  // Add message handler
+  const handleNewMessage = (role: 'user' | 'assistant', content: string) => {
+    setMessages(prev => [...prev, {
+      role,
+      content,
+      timestamp: new Date()
+    }]);
+  };
 
-        <div className="space-y-6">
-          <div className="flex flex-col items-center">
+  // Update the data channel event handler
+  const handleDataChannelMessage = (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data);
+      console.log('WebRTC data received:', data); // Debug log
+
+      // Handle OpenAI speech events
+      if (data.event === 'speech.transcribe') {
+        setCurrentTranscript(data.text);
+        setIsTranscribing(true);
+      }
+      // Handle final transcript
+      else if (data.event === 'speech.final_transcript') {
+        setMessages(prev => [...prev, {
+          role: 'user',
+          content: data.text,
+          timestamp: new Date()
+        }]);
+        setCurrentTranscript('');
+        setIsTranscribing(false);
+      }
+      // Handle OpenAI's response
+      else if (data.event === 'speech.message') {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.text,
+          timestamp: new Date()
+        }]);
+      }
+    } catch (error) {
+      console.error('Error parsing data channel message:', error);
+    }
+  };
+
+  // Set up data channel listener
+  useEffect(() => {
+    if (dataChannel.current) {
+      dataChannel.current.onmessage = handleDataChannelMessage;
+    }
+  }, []);
+
+  // Render messages and current transcript
+  const renderMessages = () => (
+    <div className="flex-grow overflow-y-auto space-y-4 mb-4">
+      {/* Existing messages */}
+      {messages.map((message, index) => (
+        <div
+          key={index}
+          className={`p-4 rounded-lg ${message.role === 'user'
+            ? 'bg-blue-100 dark:bg-blue-900 ml-auto max-w-[80%]'
+            : 'bg-gray-100 dark:bg-gray-700 mr-auto max-w-[80%]'
+            }`}
+        >
+          <p className="text-sm dark:text-gray-100">{message.content}</p>
+          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 block">
+            {message.timestamp.toLocaleTimeString()}
+          </span>
+        </div>
+      ))}
+
+      {/* Current transcript */}
+      {isTranscribing && currentTranscript && (
+        <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/50 ml-auto max-w-[80%]">
+          <p className="text-sm dark:text-gray-100 italic">
+            {currentTranscript}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex h-screen">
+      <div className="w-1/2 p-4 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+        <h2 className="text-xl font-bold mb-4 dark:text-gray-100">Chat History</h2>
+
+        {/* Debug info - remove after testing */}
+        <div className="text-xs text-gray-500 mb-2">
+          Status: {isTranscribing ? 'Transcribing...' : 'Not transcribing'}
+          {currentTranscript && <p>Current: {currentTranscript}</p>}
+        </div>
+
+        {/* Messages Container */}
+        {renderMessages()}
+
+        {/* Microphone Controls */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <div className="flex flex-col items-center gap-2">
             <button
               onClick={handleConnectionToggle}
-              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 relative text-white ${getButtonStyles()}`}
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors duration-300 ${getButtonStyles()}`}
               disabled={connectionStatus === 'connecting'}
             >
-              {connectionStatus === 'disconnected' && <IconMicrophone className="w-6 h-6" />}
-              {connectionStatus === 'connecting' && <IconSpinner className="w-6 h-6" />}
-              {connectionStatus === 'connected' && <IconStop className="w-6 h-6" />}
-
-              {connectionStatus === 'connected' && (
-                <div className="absolute inset-0">
-                  <div className="absolute inset-0 rounded-full animate-ping opacity-25 bg-primary-500 dark:bg-primary-700"></div>
-                </div>
-              )}
+              {/* Single-size icon container */}
+              <div className="w-8 h-8 flex items-center justify-center">
+                {connectionStatus === 'disconnected' && <IconMicrophone className="w-6 h-6" />}
+                {connectionStatus === 'connecting' && <IconSpinner className="w-6 h-6" />}
+                {connectionStatus === 'connected' && <IconStop className="w-6 h-6" />}
+              </div>
             </button>
 
-            <span className="mt-6 text-sm text-gray-600 dark:text-gray-400">
-              {getStatusText()}
-            </span>
+            {/* Fixed height for status text */}
+            <div className="h-6 flex items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {getStatusText()}
+              </span>
+            </div>
+
+            {/* Wave Animation */}
+            {connectionStatus === 'connected' && (
+              <div className="h-12 flex justify-center items-center">
+                {[...Array(5)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="mx-1 w-1 bg-primary-500 dark:bg-primary-700 rounded-full animate-wave"
+                    style={{
+                      height: `${20 + Math.random() * 20}px`,
+                      animationDelay: `${i * 0.1}s`
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {error && (
+              <div className="h-6 flex items-center">
+                <span className="text-red-500 dark:text-red-400 text-sm">
+                  {error}
+                </span>
+              </div>
+            )}
           </div>
+        </div>
+      </div>
 
-          {connectionStatus === 'connected' && (
-            <div className="flex justify-center items-center h-12">
-              {[...Array(5)].map((_, i) => (
-                <div
-                  key={i}
-                  className="mx-1 w-1 bg-primary-500 dark:bg-primary-700 rounded-full animate-wave"
-                  style={{
-                    height: `${20 + Math.random() * 20}px`,
-                    animationDelay: `${i * 0.1}s`
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          {error && (
-            <div className="text-red-500 dark:text-red-400 text-center text-sm">
-              {error}
-            </div>
-          )}
+      {/* Right Panel - Reserved for Claude Artifact Features */}
+      <div className="w-1/2 p-4 bg-gray-50 dark:bg-gray-800">
+        <h2 className="text-xl font-bold mb-4 dark:text-gray-100">Claude Artifacts</h2>
+        <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+          <p>Coming soon...</p>
         </div>
       </div>
     </div>
